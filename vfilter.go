@@ -135,6 +135,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/Velocidex/ordereddict"
 	"github.com/alecthomas/participle"
@@ -557,9 +558,20 @@ func (self *_Select) Eval(ctx context.Context, scope types.Scope) <-chan Row {
 			select {
 			// Are we cancelled?
 			case <-ctx.Done():
-				return
-
-				// Get a row
+				// give plugin some time to run deferred statements
+				timeout := time.After(3*time.Second)
+				for {
+					select {
+					case <-timeout:
+						scope.Log("WARN:Timed out waiting for plugin to close channel")
+						return
+					case _, ok := <-from_chan:
+						if !ok {
+							return
+						}
+					}
+				}
+			// Get a row
 			case row, ok := <-from_chan:
 				if !ok {
 					return
